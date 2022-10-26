@@ -11,6 +11,7 @@ api_url = 'http://127.0.0.1:5000'
 app = Dash(__name__)
 
 app.layout = html.Div([
+    dcc.Store(id='datainfo'),
     dcc.Store(id='model_list'),
     dcc.Store(id='model_features'),
     dcc.Store(id='model_trigger_var'),

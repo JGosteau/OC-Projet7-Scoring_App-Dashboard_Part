@@ -1,37 +1,57 @@
 from dash import Input, Output, State, html, dash_table, dcc, callback_context
 import plotly.express as px
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 #import dash_bootstrap_components as dbc
 import requests
 import pandas as pd
 import numpy as np
 import os, sys
+import gc
 
 from matplotlib import colormaps
 from matplotlib.colors import Normalize, to_hex
 
 
-def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
+def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
     #xtrain = pd.read_csv(os.path.join(os.path.dirname(__file__),"..", "..", "model", "data", 'xtrain_model.csv'), compression='gzip')
     #qualcols = np.load(os.path.join(os.path.dirname(__file__),"..", "..", "model", "data", 'qualcols.npy'), allow_pickle=True)
 
     #qual_list = xtrain[qualcols].apply(np.unique)
-    url = api_html + '/api/listcols'
+    url = api_url + '/api/listcols'
     response = requests.get(url)
     qualcols = np.array(response.json()['qualcols'])
-    print(qualcols)
 
-    url = api_html + '/api/uniquequalcols'
+    url = api_url + '/api/uniquequalcols'
     response = requests.get(url)
     qual_list = pd.Series(response.json())
-    print(qual_list)
 
-    url = api_html + '/api/ids'
+    url = api_url + '/api/ids'
     response = requests.get(url)
     ids_list = response.json()['ids']
     main_features = np.array(['AMT_GOODS_PRICE', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_INCOME_TOTAL'])
-
     
+    @app.callback(
+        Output('datainfo', 'data'),
+        Input('datainfo', 'data'),
+    )
+    def get_data_info(datainfo) :
+        url = api_url + '/api/datainfo'
+        response = requests.get(url)
+        res_dict = response.json()
+        conv_dict = {}
+        for func in res_dict :
+            conv_dict[func] = {}
+            for var in res_dict[func] :
+                for feat in res_dict[func][var] :
+                    if feat in conv_dict[func] : 
+                        conv_dict[func][feat][var] = res_dict[func][var][feat]
+                    else :
+                        conv_dict[func][feat] = {}
+                        conv_dict[func][feat][var] = res_dict[func][var][feat]
+        del response, res_dict
+        gc.collect()
+        return conv_dict
 
     @app.callback(
         Output('model_list', 'data'),
@@ -39,7 +59,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
         )
     def get_model_list(model_list):
         # some expensive data processing step
-        url = api_html + '/api/models'
+        url = api_url + '/api/models'
         
         #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.get(url)
@@ -70,7 +90,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def get_info_model(value) :
-        url = api_html + '/api/getinfomodel'
+        url = api_url + '/api/getinfomodel'
         #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.post(url, json={'model' : value})
         res = response.json()['description']
@@ -103,7 +123,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
         if model is None or loan_rate is None:
             return go.Figure(),go.Figure(),go.Figure(),None,None, None
         loan_rate = float(loan_rate)
-        url = api_html + '/api/trigger'
+        url = api_url + '/api/trigger'
         #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.post(url, json={'model' : model, 'loan_rate' : [loan_rate], 'reimb_ratio' : [0]}).json()
         df = pd.DataFrame(response['optimized_triggers'])
@@ -273,12 +293,12 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
             features_values[feat] = None
 
         if id in ids_list :
-            url = api_html + '/api/getinfoid'
+            url = api_url + '/api/getinfoid'
             response = requests.post(url, json={"SK_ID_CURR" : id}).json()
             for k in features_values :
                 features_values[k] = response[k]
         if imputer_method != 'None' :
-            url = api_html + '/api/imputer'
+            url = api_url + '/api/imputer'
             response = requests.post(url, json={'imputer' : imputer_method, 'x' : {}}).json()
             for k in features_values :
                 if features_values[k] is None :
@@ -317,8 +337,8 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
 
         
         # Secondary Features
-        n_feat_cols = 6
-        n_feat_rows = 2
+        n_feat_cols = 3
+        n_feat_rows = 3
 
         tabs = []
         new_features = np.array(features)[~np.isin(features, main_features)]
@@ -339,7 +359,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
                     html.H6(feat, style={'width' : '69%', 'display': 'inline-block'}),
                     html.I("(%.3f)" %(df[feat]), style={'width' : '30%', 'textAlign' : 'right', 'color' : color_df[feat]}),
                     input_field
-                ], style={'width' : '15%', 'display': 'inline-block', 'vertical-align': 'top'})
+                ], style={'width' : '%s%%' %(99/n_feat_cols), 'display': 'inline-block', 'vertical-align': 'top'})
                 #divs_features += div
                 divs_features.append(div)
             if j != n_tabs-1 :
@@ -348,10 +368,125 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
                 text = 'Var %d-%d' %(ini, len(new_features))
             divs_features = dcc.Tab(label = text, children = divs_features, style={'width' : '100%', 'height' : '100px'})
             tabs.append(divs_features)
-        tabs = dcc.Tabs(tabs)
+        tabs = dcc.Tabs(tabs,id='tabs_features')
         return main_divs, tabs
 
+    @app.callback(
+        Output('polar_graph_feat', 'figure'),
+        Output('boxplot_graph_feat', 'figure'),
+        Input('id_value', 'value'),
+        Input('datainfo', 'data'),
+        Input("input_AMT_GOODS_PRICE", "value"),
+        Input("input_AMT_CREDIT", "value"),
+        Input("input_AMT_ANNUITY", "value"),
+        Input("input_AMT_INCOME_TOTAL", "value"),
+        Input("model_features_box", "children"),
+        Input("tabs_features", "value"),
+        prevent_initial_call=True,
+    )
+    def get_polar_graph(id, datainfo, loan, credit, annuity, income, features_box, active_tab) :
+        none_res =go.Figure(),go.Figure()
+        data = [[loan, credit, annuity, income]]
+        columns = ['AMT_GOODS_PRICE','AMT_CREDIT','AMT_ANNUITY','AMT_INCOME_TOTAL']
+        if active_tab is None :
+            return none_res
+        active_tab = int(active_tab.split('-')[-1])-1
+        print('+++++ ACTIVE TABS : ', active_tab)
+        try :
+            tabs = features_box['props']['children']
+        except : 
+            return none_res
+        tab = tabs[active_tab] 
+        divs = tab['props']['children']
+        for div in divs :
+            feat = div['props']['children'][0]['props']['children']
+            try :
+                value = div['props']['children'][-1]['props']['value']
+            except :
+                value = None
+            if feat not in qualcols :
+                data[0].append(value)
+                columns.append(feat)
 
+
+        df = pd.DataFrame(data, index = ['indiv'], columns=columns)
+        df_mean = pd.DataFrame(datainfo['mean'])[columns]
+        df_median = pd.DataFrame(datainfo['median'])[columns].loc[['all']]
+        df_q3 = pd.DataFrame(datainfo['q3'])[columns].loc[['all']]
+        df_q1 = pd.DataFrame(datainfo['q1'])[columns].loc[['all']]
+        df_d9 = pd.DataFrame(datainfo['d9'])[columns].loc[['all']]
+        df_d1 = pd.DataFrame(datainfo['d1'])[columns].loc[['all']]
+
+        df_min = pd.DataFrame(datainfo['min'])[columns].loc['all']
+        df_max = pd.DataFrame(datainfo['max'])[columns].loc['all']
+        df_iqr = df_q3 - df_q1
+        df_iqr_l = df_q1 - 1.5*df_iqr
+        df_iqr_h = df_q3 + 1.5*df_iqr
+        df_iqr_l.index = ['iqr_l']
+        df_iqr_h.index = ['iqr_h']
+
+        df = pd.concat((df, df_mean.loc[['0.0','1.0']], df_iqr_l, df_iqr_h))
+        df_norm = (df-df_min)/(df_max-df_min)
+        
+        dff = df.unstack()#.reset_index()
+        dff_norm = df_norm.unstack()
+        dff = pd.DataFrame({'values' : dff, 'norm' : dff_norm}).reset_index()
+
+        dff.columns = ['features', 'level','values', 'norm']
+        fig = px.line_polar(dff, r="norm", theta="features", custom_data=['values'], color='level', line_close=True, range_r=[0, max(dff.norm)])
+        fig.update_traces(
+            hovertemplate="<br>".join([
+                "norm. values: %{r}",
+                "features: %{theta}",
+                "values: %{customdata[0]}",
+            ])
+        )
+
+
+
+
+        fig_boxplot = make_subplots(rows=int(np.ceil(len(columns)/2)), cols=2, horizontal_spacing = 0.4)
+        #fig_boxplot = make_subplots(cols=len(columns), rows=1)
+        for i, feat in enumerate(columns) :
+            if i > len(columns)/2 :
+                c = 2
+                di = int(np.ceil(len(columns)/2))
+            else :
+                c= 1
+                di = 0
+            data = go.Box(
+                q1=df_q1[[feat]].iloc[0], 
+                median=df_median[[feat]].iloc[0],
+                q3=df_q3[[feat]].iloc[0], 
+                lowerfence=df_d1[[feat]].iloc[0],
+                upperfence=df_d9[[feat]].iloc[0], 
+                #mean=df_mean.iloc[0],
+                #pointpos = info['max'][columns].iloc[0],
+                y=[feat],
+                marker_color  = 'red',
+                name='all',
+            )
+            data2 = go.Scatter(
+                x = df[[feat]].iloc[0],
+                y=[feat],
+                marker_color = 'black',
+                mode = 'markers',
+                name = 'indiv',
+                #mean=[ 2.2, 2.8, 3.2 ],
+                #sd=[ 0.2, 0.4, 0.6 ], 
+                #notchspan=[ 0.2, 0.4, 0.6 ] 
+                hovertemplate="<br>".join([
+                            "norm. values: %{y}",
+                            #"values: %{customdata[0]}",
+                        ])
+            )
+            fig_boxplot.add_trace(data, row = i+1-di, col=c)
+            fig_boxplot.add_trace(data2, row = i+1-di, col=c)
+            #fig_boxplot.add_trace(data, row = 1, col=i+1)
+            #fig_boxplot.add_trace(data2, row = 1, col=i+1)
+        fig_boxplot.update_layout(showlegend=False, margin=dict(l=100, r=0, t=0, b=0))
+        return fig, fig_boxplot
+        
 
     @app.callback(
         Output("prediction_value", "children"),
@@ -391,7 +526,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
         x['AMT_CREDIT'] = credit
         x['AMT_ANNUITY'] = annuity
         x['AMT_INCOME_TOTAL'] = income
-
+        
         for tab in tabs :
             divs = tab['props']['children']
             for div in divs :
@@ -410,7 +545,7 @@ def register_callbacks(app, api_html = 'http://127.0.0.1:5000'):
             return none_res
         trigger_var_df = pd.read_json(dfjson, orient='split')
         opt_trigger = float(model_trigger_opt)
-        url = api_html + '/api/predict'
+        url = api_url + '/api/predict'
         #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.post(url, json=sent)
         probability = response.json()['probability']

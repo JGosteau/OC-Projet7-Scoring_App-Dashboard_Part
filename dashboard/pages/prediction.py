@@ -6,15 +6,15 @@ import os
 
 
 def create_pred_layout(api_url='http://127.0.0.1:5000') :
-    print(api_url)
     main_features = ['AMT_GOODS_PRICE', 'AMT_CREDIT', 'AMT_ANNUITY', 'AMT_INCOME_TOTAL']
     url = api_url + '/api/ids'
     response = requests.get(url)
     ids_list = response.json()['ids']
     short_id_list = list(np.random.choice(ids_list, size=50, replace=False)) 
 
+
     prediction_tab = dcc.Tab(label='Prédiction', children = [
-                
+                #html.Button('test-button',id="test_button", style={'width' : '100%', 'height' : '60px', 'textAlign': 'center'}),
                 html.Div([
                     html.Div([
                         html.H3(children='Choix du Modèle :', style={'width' : '30%', 'display': 'inline-block', 'vertical-align': 'middle'}),
@@ -22,7 +22,7 @@ def create_pred_layout(api_url='http://127.0.0.1:5000') :
                     ], style={'width' : '30%', 'display': 'inline-block', 'vertical-align': 'top'}),
                     html.Div([
                         html.H3(children='Identifiant :', style={'width' : '30%', 'display': 'inline-block', 'vertical-align': 'middle'}),
-                        dcc.Dropdown(short_id_list, value=245150,id="id_value", style={'width' : '69%', 'display': 'inline-block', 'vertical-align': 'middle'}),
+                        dcc.Dropdown(short_id_list, value=short_id_list[0],id="id_value", style={'width' : '69%', 'display': 'inline-block', 'vertical-align': 'middle'}),
                     ], style={'width' : '30%', 'display': 'inline-block', 'vertical-align': 'top'}),
                     html.Div([
                         html.H3(children='Méthode d\'imputation :', style={'width' : '50%', 'display': 'inline-block', 'vertical-align': 'middle'}),
@@ -52,8 +52,14 @@ def create_pred_layout(api_url='http://127.0.0.1:5000') :
                 ], style={'height' : '40px' }),
                 html.Div([
                     html.Button(html.H3('Variables Secondaires'), id='hide_sec_features_button', style={"border":"1px black solid",'width' : '100%', 'textAlign': 'center', 'vertical-align': 'top', 'backgroundColor': 'white'}),
-                    html.Div(id="model_features_box", style={'height' : '300px'}),
-                ]),
+                    html.Div([
+                        html.Div(html.Div(dcc.Tabs([],id='tabs_features'), id="model_features_box"), style={'width' : '60%', 'display': 'inline-block', 'vertical-align': 'top'}),
+                        html.Div(dcc.Tabs([
+                            dcc.Tab(children = dcc.Graph(id='polar_graph_feat',style={'height' : '350px'}), label='Graphe Polaire'),
+                            dcc.Tab(children = dcc.Graph(id='boxplot_graph_feat',style={'height' : '350px'}), label='Boxplot')
+                        ]), style={'width' : '39%', 'display': 'inline-block', 'vertical-align': 'top'})
+                    ]),
+                ], style={'height' : '500px'}),
                 html.Button(html.H3('Predire'),id="predict", style={'width' : '100%', 'height' : '60px', 'textAlign': 'center'}),
                 html.Div([
                     html.Div([
@@ -81,7 +87,7 @@ def create_pred_layout(api_url='http://127.0.0.1:5000') :
                 ], style={'width' : '50%', 'display': 'inline-block', 'vertical-align': 'top'}),
                 #dcc.Store(id='contribs'),
                 html.Div([html.H4('Influence des variables sur la prédiction', style={'textAlign': 'center'}),
-                dcc.Graph(id='waterfall_figure')
+                html.Div(dcc.Graph(id='waterfall_figure'))
                 ])
             ])
     return prediction_tab
