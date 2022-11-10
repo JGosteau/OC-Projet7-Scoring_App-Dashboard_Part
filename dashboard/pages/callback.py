@@ -14,6 +14,9 @@ from matplotlib.colors import Normalize, to_hex
 
 
 def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
+    """
+    Cette fonction gère tout les callbacks du Dashboard.
+    """
     url = api_url + '/api/listcols'
     response = requests.get(url)
     qualcols = np.array(response.json()['qualcols'])
@@ -32,6 +35,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input('datainfo', 'data'),
     )
     def get_data_info(datainfo) :
+        """
+        Récupère les informations du jeu de donnée d'entrainement : moyenne, medianne, quantile, ...
+        """
         url = api_url + '/api/datainfo'
         response = requests.get(url)
         res_dict = response.json()
@@ -54,6 +60,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input('model_list', 'data')
         )
     def get_model_list(model_list):
+        """
+        Récupère la liste des modèles disponibles.
+        """
         url = api_url + '/api/models'
         response = requests.get(url)
         df = response.json()['available models']
@@ -69,6 +78,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def get_info_model(value) :
+        """
+        Récupère les informations d'un modèle sélectionné dans la liste déroulante model_dropdown.
+        """
         url = api_url + '/api/getinfomodel'
         response = requests.post(url, json={'model' : value})
         res = response.json()['description']
@@ -98,6 +110,11 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def get_fig_trigger(model, loan_rate) :
+        """
+        Tracer les figures sur la variation de la fonction coût métier et des matrices de confusion en fonction du seuil.
+        Détermine aussi le seuil optimal pour un taux d'emprunt en particulier (input est_loan_rate2)
+        """
+
         if model is None or loan_rate is None:
             return go.Figure(),go.Figure(),go.Figure(),None,None, None
         loan_rate = float(loan_rate)
@@ -175,6 +192,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input("Imputer_method2", "value"),
     )
     def update_options(value1, value2):
+        """
+        Gère le choix de la méthode d'imputation sur tout les onglets
+        """
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if  trigger_id == "Imputer_method" :
@@ -196,6 +216,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input('model_list', 'data'),
     )
     def update_options(search_value1,value1,search_value2,value2,search_value3,value3,model_list):
+        """
+        Gère le choix du modèle sur tout les onglets
+        """
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if  trigger_id == "model_dropdown" :
@@ -220,6 +243,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input('model_list', 'data'),
     )   
     def update_options(value1,value2,value3,model_list):
+        """
+        Gère le choix du modèle sur tout les onglets
+        """
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
         if trigger_id == "model_dropdown" :
@@ -246,6 +272,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def estimate_loan_time(credit, loan, annuity, loan_rate) :
+        """
+        Détermine le taux d'emprunt en fonction de l'emprunt et du crédit.
+        """
         est_time = None
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -272,6 +301,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def get_desc(dfjson, imputer_method, id):
+        """
+        Récupère la liste des variables d'un modèle et permet le choix de la valeur de ces variables dans l'onglet 'Info Individu'
+        """
         df = pd.read_json(dfjson, orient='split')
         features = df.features
         df = df.set_index('features')['feature importance']
@@ -367,6 +399,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         State("model_features_box", "children"),
     )
     def update_indiv_data(n_clicks, n_clicks2, loan, credit, annuity, income, features_box):
+        """
+        Stocke dans une variable les données d'un individu
+        """
         x = {}
         x['AMT_GOODS_PRICE'] = loan
         x['AMT_CREDIT'] = credit
@@ -397,6 +432,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input("tabs_features", "value"),
     )
     def update_indiv_data(n_click1, n_click2, loan, credit, annuity, income,tabs, active_tab):
+        """
+        Stocke dans une variable les données d'un individu pour la plage de variables séléctionnées.
+        """
         x = {}
         x['AMT_GOODS_PRICE'] = loan
         x['AMT_CREDIT'] = credit
@@ -430,6 +468,9 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         prevent_initial_call=True,
     )
     def get_polar_graph(model, id, datainfo, x) :
+        """
+        Trace les figures polaires et en boxplot pour la comparaison des valeurs des variables d'un individu par rapport à la population du jeu d'entrainement.
+        """
         none_res =go.Figure(),go.Figure()
         data = []
         columns = []
@@ -522,7 +563,10 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         State("model_trigger_opt", "children"),
         prevent_initial_call=True,
     )
-    def test(x, n_clicks, model, dfjson, model_trigger_opt) :
+    def proba_calc(x, n_clicks, model, dfjson, model_trigger_opt) :
+        """
+        Calcul la probabilité de remboursement d'un individu et trace la figure des contributions des différentes varaibles du modèle sur cette prédiction.
+        """
         style_status = {'width' : '20%', 'display': 'inline-block'}
         style_gain = {'width' : '20%', 'display': 'inline-block'}
         none_res = [None, None, style_gain, None, style_gain, go.Figure(), None, style_status, None]
@@ -547,7 +591,7 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                     if x[k] is None :
                         none_res[-1] = 'Erreur ! Valeur nulle pour la variable : %s' %(k)
                 return none_res
-            print(str(sent).replace('\'','"'))
+            print(str(sent).replace('\'','"').replace(',',',\n').replace('{','{\n').replace('}','\n}'))
             trigger_var_df = pd.read_json(dfjson, orient='split')
             
             opt_trigger = float(model_trigger_opt)
@@ -556,8 +600,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
             response = requests.post(url, json=sent)
             probability = response.json()['probability']
             contribs = pd.DataFrame(response.json()['contribs'])
-            print(probability)
-            print(contribs)
             
             fig = go.Figure(go.Waterfall(
                 name = "Prediction", #orientation = "h", 
