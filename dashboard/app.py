@@ -8,7 +8,7 @@ from dashboard.pages.model import model_tab
 from dashboard.pages.callback import register_callbacks
 
 api_url = 'http://127.0.0.1:5000'
-#api_url = 'http://albertkrif.pythonanywhere.com'
+api_url = 'http://jgosteau1.pythonanywhere.com'
 
 url = api_url + '/api/ids'
 response = requests.get(url)

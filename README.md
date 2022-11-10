@@ -6,9 +6,9 @@ Nous souhaitons mettre en place un outil de « scoring credit » pour la sociét
 Ce repository contient les éléments nécessaires au fonctionnement d’un serveur dashboard faisant appel aux modèles de classification entrainé disponible via des requetes api définit dans le repository OC-Projet7-Scoring_App-API_Part.
 
 Le repository contient les fichiers suivants :
-    - main.py : lance le serveur dashboard
-    - dashboard/app.py : gère les différentes pages du dashboard
-    - dashboard/pages/info_indiv.py : gère l'interface d'affichage des informations d'un individu.
-    - dashboard/pages/prediction.py : gère l'interface d'affichage des résultats des prédictions d'un individu.
-    - dashboard/pages/model.py : gère l'interface d'affichage des performances du modèle de classification choisi.
-    - dashboard/pages/callbacks.py : gère toutes les requêtes internes et externes du serveur.
+- main.py : lance le serveur dashboard
+- dashboard/app.py : gère les différentes pages du dashboard
+- dashboard/pages/info_indiv.py : gère l'interface d'affichage des informations d'un individu.
+- dashboard/pages/prediction.py : gère l'interface d'affichage des résultats des prédictions d'un individu.
+- dashboard/pages/model.py : gère l'interface d'affichage des performances du modèle de classification choisi.
+- dashboard/pages/callbacks.py : gère toutes les requêtes internes et externes du serveur.
