@@ -14,10 +14,6 @@ from matplotlib.colors import Normalize, to_hex
 
 
 def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
-    #xtrain = pd.read_csv(os.path.join(os.path.dirname(__file__),"..", "..", "model", "data", 'xtrain_model.csv'), compression='gzip')
-    #qualcols = np.load(os.path.join(os.path.dirname(__file__),"..", "..", "model", "data", 'qualcols.npy'), allow_pickle=True)
-
-    #qual_list = xtrain[qualcols].apply(np.unique)
     url = api_url + '/api/listcols'
     response = requests.get(url)
     qualcols = np.array(response.json()['qualcols'])
@@ -58,44 +54,27 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input('model_list', 'data')
         )
     def get_model_list(model_list):
-        # some expensive data processing step
         url = api_url + '/api/models'
-        
-        #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.get(url)
         df = response.json()['available models']
         return df
     
-    @app.callback(
-        Output('model_features_box', 'style'),
-        Input('hide_sec_features_button', 'n_clicks'),
-        State('model_features_box', 'style'),
-        prevent_initial_call=True,
-    )
-    def hide(n_clicks, style):
-        if 'display' in style.keys() :
-            if style['display'] == 'none' :
-                style['display'] = 'block'
-            else :
-                style['display'] = 'none'
-        else :
-            style['display'] = 'none'
-        return style
 
     @app.callback(
         Output("model_desc", "children"),
         Output("model_features", "data"),
         Output("model_feat_importance", "figure"),
+        Output("model_roc", "children"),
         Input("model_dropdown", "value"),
         prevent_initial_call=True,
     )
     def get_info_model(value) :
         url = api_url + '/api/getinfomodel'
-        #print('#### GETTING MODEL LIST - URL HOST : ', url)
         response = requests.post(url, json={'model' : value})
         res = response.json()['description']
         features = response.json()['features']
         features_imp = response.json()['feature_importances']
+        roc = '%.3f' %(float(response.json()['roc']))
         df = pd.DataFrame({'features' : features, 'feature importance' : features_imp})
         rows = []
         for k in res :
@@ -105,7 +84,7 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
 
         fig = px.bar(df, x="feature importance", y="features")
         dfjson = df.to_json(date_format='iso', orient='split')
-        return table, dfjson, fig
+        return table, dfjson, fig, roc
 
     @app.callback(
         Output("model_trigger_figure", "figure"),
@@ -116,7 +95,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Output("model_trigger_var", "data"),
         Input("model_dropdown", "value"),
         Input("est_loan_rate2", "children"),
-        #Input("est_loan_rate", "value"),
         prevent_initial_call=True,
     )
     def get_fig_trigger(model, loan_rate) :
@@ -142,12 +120,7 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
             opt_trigger = "%.2f" %(opt_trigger)
         else :
             cost = 'le taux doit être inf à 1'
-            #cost = min(df['opt_trigger'])
             opt_trigger = 'le taux doit être inf à 1'
-            #opt_trigger = min(df['opt_trigger'])
-            #cost = df[df.opt_trigger==opt_trigger]['cost'].iloc[0]
-            #opt_trigger = "%.2f" %(opt_trigger)
-            #cost = "%.3f" %(cost)
         graph_data = pd.DataFrame(response['exp_cost_func'])
         TN = graph_data
         
@@ -167,78 +140,98 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         fig2 = px.imshow(data, text_auto=True)
 
 
-        df_T = graph_data[graph_data.loan_rate == 0].set_index('trigger')[['ROC', 'TP', 'TN']]
+        df_T = graph_data[graph_data.loan_rate == 0].set_index('trigger')[['TP', 'TN']]
         df_T['FP'] = 1-df_T['TP']
         df_T['FN'] = 1-df_T['TN']
-        df_T.columns = ['Score ROC', 'Rembourse et Acc.', 'Rembourse Pas et Non Acc.', 'Rembourse et Non Acc.', 'Rembourse Pas et Acc.']
+        df_T.columns = ['VP', 'FN', 'FP', 'VN']
         df_T = df_T.stack().reset_index()
         df_T.columns = ['trigger', 'status', 'value']
-        fig3 = px.line(df_T, x='trigger', y='value', color = 'status', color_discrete_sequence=['black','green', 'red','green', 'red'])
+        fig3 = px.line(df_T, x='trigger', y='value', color = 'status', color_discrete_sequence=['green', 'red','green', 'red'])
         fig3.data[-2]['line']['dash'] = 'dash'
         fig3.data[-1]['line']['dash'] = 'dash'
         fig3.add_vline(x=trig)
         return fig1, fig2, fig3, opt_trigger, cost, dfjson
     
 
-
+    @app.callback(
+        Output("id_value", "value"),
+        Output("id_value2", "value"),
+        Input("id_value", "value"),
+        Input("id_value2", "value"),
+    )
+    def update_options(value1, value2):
+        ctx = callback_context
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if  trigger_id == "id_value" :
+            value = value1
+        elif trigger_id == "id_value2" :
+            value = value2
+        return value, value
+        
+    @app.callback(
+        Output("Imputer_method", "value"),
+        Output("Imputer_method2", "value"),
+        Input("Imputer_method", "value"),
+        Input("Imputer_method2", "value"),
+    )
+    def update_options(value1, value2):
+        ctx = callback_context
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if  trigger_id == "Imputer_method" :
+            value = value1
+        elif trigger_id == "Imputer_method2" :
+            value = value2
+        return value, value
 
     @app.callback(
         Output("model_dropdown", "options"),
         Output("model_dropdown2", "options"),
-        #Output("model_dropdown", "value"),
-        #Output("model_dropdown2", "value"),
+        Output("model_dropdown3", "options"),
         Input("model_dropdown", "search_value"),
         State("model_dropdown", "value"),
         Input("model_dropdown2", "search_value"),
         State("model_dropdown2", "value"),
+        Input("model_dropdown3", "search_value"),
+        State("model_dropdown3", "value"),
         Input('model_list', 'data'),
     )
-    def update_options(search_value1,value1,search_value2,value2,model_list):
+    def update_options(search_value1,value1,search_value2,value2,search_value3,value3,model_list):
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        value = value1 if trigger_id == "model_dropdown" else value2
+        if  trigger_id == "model_dropdown" :
+            value = value1
+        elif trigger_id == "model_dropdown1" :
+            value = value2
+        else :
+            value = value3
         list_options = model_list
         if value is None :
             value = model_list[0]
         
-        return list_options,list_options#, value, value
+        return list_options,list_options,list_options
 
     @app.callback(
         Output("model_dropdown", "value"),
         Output("model_dropdown2", "value"),
+        Output("model_dropdown3", "value"),
         Input("model_dropdown", "value"),
         Input("model_dropdown2", "value"),
+        Input("model_dropdown3", "value"),
         Input('model_list', 'data'),
     )   
-    def update_options(value1,value2,model_list):
+    def update_options(value1,value2,value3,model_list):
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
-        value = value1 if trigger_id == "model_dropdown" else value2
-        list_options = model_list
+        if trigger_id == "model_dropdown" :
+            value = value1
+        elif trigger_id == "model_dropdown2" :
+            value = value2
+        else :
+            value = value3
         if value is None :
             value = model_list[0]
         
-        return value, value
-
-    """@app.callback(
-        Output("est_loan_rate", "value"),
-        Output("est_loan_rate2", "children"),
-        Output("est_time", "children"),
-        Input("input_AMT_GOODS_PRICE", "value"),
-        Input("input_AMT_CREDIT", "value"),
-        Input("input_AMT_ANNUITY", "value"),
-        #Input("est_calcul", "n_clicks"),
-        #prevent_initial_call=True,
-    )
-    def estimate_loan_time(loan, credit, annuity) :
-        est_loan_rate = 0
-        est_time = None
-        try :
-            est_loan_rate = '%.2f' %(credit/loan-1)
-            est_time = '%.2f' %(credit/annuity)
-        except :
-            None
-        return est_loan_rate,est_loan_rate, est_time"""
+        return value, value, value
 
     @app.callback(
         Output("est_loan_rate", "value"),
@@ -250,7 +243,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Input("input_AMT_GOODS_PRICE", "value"),
         Input("input_AMT_ANNUITY", "value"),
         Input("est_loan_rate", "value"),
-        #Input("est_calcul", "n_clicks"),
         prevent_initial_call=True,
     )
     def estimate_loan_time(credit, loan, annuity, loan_rate) :
@@ -275,7 +267,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         Output("main_features", "children"),
         Output("model_features_box", "children"),
         Input("model_features", "data"),
-        #Input('reset', 'n_clicks'),
         Input("Imputer_method", "value"),
         Input("id_value", "value"),
         prevent_initial_call=True,
@@ -306,12 +297,7 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                 elif type(features_values[k]) != str :
                     if np.isnan(features_values[k]) :
                         features_values[k] = response[k]
-        #print(tmp)
-        #table_header = [html.Thead(html.Tr([html.Th("Opération"), html.Th("Fonction")]))]
-        
 
-
-        # Main Features 
 
         divs_features = []
         for feat in main_features :
@@ -360,7 +346,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                     html.I("(%.3f)" %(df[feat]), style={'width' : '30%', 'textAlign' : 'right', 'color' : color_df[feat]}),
                     input_field
                 ], style={'width' : '%s%%' %(99/n_feat_cols), 'display': 'inline-block', 'vertical-align': 'top'})
-                #divs_features += div
                 divs_features.append(div)
             if j != n_tabs-1 :
                 text = 'Var %d-%d' %(ini, end)
@@ -372,31 +357,58 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         return main_divs, tabs
 
     @app.callback(
-        Output('polar_graph_feat', 'figure'),
-        Output('boxplot_graph_feat', 'figure'),
-        Input('id_value', 'value'),
-        Input('datainfo', 'data'),
-        Input("input_AMT_GOODS_PRICE", "value"),
-        Input("input_AMT_CREDIT", "value"),
-        Input("input_AMT_ANNUITY", "value"),
-        Input("input_AMT_INCOME_TOTAL", "value"),
-        Input("model_features_box", "children"),
-        Input("tabs_features", "value"),
-        prevent_initial_call=True,
+        Output('indiv_data', 'data'),
+        Input('predict', 'n_clicks'),
+        Input('act_data', 'n_clicks'),
+        State("input_AMT_GOODS_PRICE", "value"),
+        State("input_AMT_CREDIT", "value"),
+        State("input_AMT_ANNUITY", "value"),
+        State("input_AMT_INCOME_TOTAL", "value"),
+        State("model_features_box", "children"),
     )
-    def get_polar_graph(id, datainfo, loan, credit, annuity, income, features_box, active_tab) :
-        none_res =go.Figure(),go.Figure()
-        data = [[loan, credit, annuity, income]]
-        columns = ['AMT_GOODS_PRICE','AMT_CREDIT','AMT_ANNUITY','AMT_INCOME_TOTAL']
+    def update_indiv_data(n_clicks, n_clicks2, loan, credit, annuity, income, features_box):
+        x = {}
+        x['AMT_GOODS_PRICE'] = loan
+        x['AMT_CREDIT'] = credit
+        x['AMT_ANNUITY'] = annuity
+        x['AMT_INCOME_TOTAL'] = income
+        tabs = features_box['props']['children']
+        for tab in tabs :
+            divs = tab['props']['children']
+            for div in divs :
+                feat = div['props']['children'][0]['props']['children']
+                try :
+                    value = div['props']['children'][-1]['props']['value']
+                except :
+                    value = None
+                x[feat] = value
+        print(x)
+        return x
+    
+    @app.callback(
+        Output('indiv_tabs', 'data'),
+        Input('predict', 'n_clicks'),
+        Input('act_data', 'n_clicks'),
+        State("input_AMT_GOODS_PRICE", "value"),
+        State("input_AMT_CREDIT", "value"),
+        State("input_AMT_ANNUITY", "value"),
+        State("input_AMT_INCOME_TOTAL", "value"),
+        Input("tabs_features", "children"),
+        Input("tabs_features", "value"),
+    )
+    def update_indiv_data(n_click1, n_click2, loan, credit, annuity, income,tabs, active_tab):
+        x = {}
+        x['AMT_GOODS_PRICE'] = loan
+        x['AMT_CREDIT'] = credit
+        x['AMT_ANNUITY'] = annuity
+        x['AMT_INCOME_TOTAL'] = income
+        tabs = tabs
         if active_tab is None :
-            return none_res
-        active_tab = int(active_tab.split('-')[-1])-1
-        print('+++++ ACTIVE TABS : ', active_tab)
-        try :
-            tabs = features_box['props']['children']
-        except : 
-            return none_res
-        tab = tabs[active_tab] 
+            active_tab = 0
+        else :
+            active_tab = int(active_tab.split('-')[-1])-1
+        print(active_tab)
+        tab = tabs[active_tab]
         divs = tab['props']['children']
         for div in divs :
             feat = div['props']['children'][0]['props']['children']
@@ -404,12 +416,30 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                 value = div['props']['children'][-1]['props']['value']
             except :
                 value = None
-            if feat not in qualcols :
-                data[0].append(value)
-                columns.append(feat)
+            x[feat] = value
+        return x
 
 
-        df = pd.DataFrame(data, index = ['indiv'], columns=columns)
+    @app.callback(
+        Output('polar_graph_feat', 'figure'),
+        Output('boxplot_graph_feat', 'figure'),
+        Input('model_dropdown', 'value'),
+        Input('id_value', 'value'),
+        Input('datainfo', 'data'),
+        Input('indiv_tabs', 'data'),
+        prevent_initial_call=True,
+    )
+    def get_polar_graph(model, id, datainfo, x) :
+        none_res =go.Figure(),go.Figure()
+        data = []
+        columns = []
+        for k in x :
+            if k not in qualcols :
+                data.append(x[k])
+                columns.append(k)
+
+
+        df = pd.DataFrame([data], index = ['individu'], columns=columns)
         df_mean = pd.DataFrame(datainfo['mean'])[columns]
         df_median = pd.DataFrame(datainfo['median'])[columns].loc[['all']]
         df_q3 = pd.DataFrame(datainfo['q3'])[columns].loc[['all']]
@@ -424,11 +454,14 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
         df_iqr_h = df_q3 + 1.5*df_iqr
         df_iqr_l.index = ['iqr_l']
         df_iqr_h.index = ['iqr_h']
+        print(df_mean.loc[['all']].index)
+        df = pd.concat((df, df_mean.loc[['all']])).reset_index()
+        df['index'][df['index'] == 'all'] = 'moyenne'
+        df = df.set_index('index')
 
-        df = pd.concat((df, df_mean.loc[['0.0','1.0']], df_iqr_l, df_iqr_h))
         df_norm = (df-df_min)/(df_max-df_min)
         
-        dff = df.unstack()#.reset_index()
+        dff = df.unstack()
         dff_norm = df_norm.unstack()
         dff = pd.DataFrame({'values' : dff, 'norm' : dff_norm}).reset_index()
 
@@ -442,11 +475,7 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
             ])
         )
 
-
-
-
-        fig_boxplot = make_subplots(rows=int(np.ceil(len(columns)/2)), cols=2, horizontal_spacing = 0.4)
-        #fig_boxplot = make_subplots(cols=len(columns), rows=1)
+        fig_boxplot = make_subplots(rows=int(np.ceil(len(columns)/2))+1, cols=2, horizontal_spacing = 0.4)
         for i, feat in enumerate(columns) :
             if i > len(columns)/2 :
                 c = 2
@@ -460,8 +489,6 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                 q3=df_q3[[feat]].iloc[0], 
                 lowerfence=df_d1[[feat]].iloc[0],
                 upperfence=df_d9[[feat]].iloc[0], 
-                #mean=df_mean.iloc[0],
-                #pointpos = info['max'][columns].iloc[0],
                 y=[feat],
                 marker_color  = 'red',
                 name='all',
@@ -472,122 +499,99 @@ def register_callbacks(app, api_url = 'http://127.0.0.1:5000'):
                 marker_color = 'black',
                 mode = 'markers',
                 name = 'indiv',
-                #mean=[ 2.2, 2.8, 3.2 ],
-                #sd=[ 0.2, 0.4, 0.6 ], 
-                #notchspan=[ 0.2, 0.4, 0.6 ] 
-                hovertemplate="<br>".join([
-                            "norm. values: %{y}",
-                            #"values: %{customdata[0]}",
-                        ])
             )
             fig_boxplot.add_trace(data, row = i+1-di, col=c)
             fig_boxplot.add_trace(data2, row = i+1-di, col=c)
-            #fig_boxplot.add_trace(data, row = 1, col=i+1)
-            #fig_boxplot.add_trace(data2, row = 1, col=i+1)
         fig_boxplot.update_layout(showlegend=False, margin=dict(l=100, r=0, t=0, b=0))
         return fig, fig_boxplot
         
-
     @app.callback(
         Output("prediction_value", "children"),
         Output("prediction_gain", "children"),
         Output("prediction_gain", "style"),
         Output("ratio_gain", "children"),
         Output("ratio_gain", "style"),
-        #Output("contribs", "data"),
         Output("waterfall_figure", "figure"),
         Output("prediction_status", "children"),
         Output("prediction_status", "style"),
+        Output("pred_calc_status", "children"),
+        Input('indiv_data', 'data'),
         Input('predict', 'n_clicks'),
         Input("model_dropdown", "value"),
-        Input("model_features_box", "children"),
-        Input("input_AMT_GOODS_PRICE", "value"),
-        Input("input_AMT_CREDIT", "value"),
-        Input("input_AMT_ANNUITY", "value"),
-        Input("input_AMT_INCOME_TOTAL", "value"),
-        Input("model_trigger_var", "data"),
-        Input("model_trigger_opt", "children"),
+        State("model_trigger_var", "data"),
+        State("model_trigger_opt", "children"),
         prevent_initial_call=True,
     )
-    def test(n_clicks, model, children, loan, credit, annuity, income, dfjson, model_trigger_opt) :
-
+    def test(x, n_clicks, model, dfjson, model_trigger_opt) :
         style_status = {'width' : '20%', 'display': 'inline-block'}
         style_gain = {'width' : '20%', 'display': 'inline-block'}
+        none_res = [None, None, style_gain, None, style_gain, go.Figure(), None, style_status, None]
 
-        #print(children['props']['children'][0]['props']['children'][1]['props']['value'])
-        none_res = (None, None, style_gain, None, style_gain, go.Figure(), None, style_status)
-        try :
-            tabs = children['props']['children']
-        except : 
+        ctx = callback_context
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if trigger_id == 'model_dropdown' :
             return none_res
-        #print(children['props']['children'][1]['props']['children'][0]['props']['children'][1])
-        x = {}
-        x['AMT_GOODS_PRICE'] = loan
-        x['AMT_CREDIT'] = credit
-        x['AMT_ANNUITY'] = annuity
-        x['AMT_INCOME_TOTAL'] = income
-        
-        for tab in tabs :
-            divs = tab['props']['children']
-            for div in divs :
-                feat = div['props']['children'][0]['props']['children']
-                try :
-                    value = div['props']['children'][-1]['props']['value']
-                except :
-                    value = None
-                x[feat] = value
-        sent = {
-            "model" : model,
-            "x" : x
-        }
-        print(x['AMT_CREDIT'])
-        if None in x.values() :
-            return none_res
-        trigger_var_df = pd.read_json(dfjson, orient='split')
-        opt_trigger = float(model_trigger_opt)
-        url = api_url + '/api/predict'
-        #print('#### GETTING MODEL LIST - URL HOST : ', url)
-        response = requests.post(url, json=sent)
-        probability = response.json()['probability']
-        contribs = pd.DataFrame(response.json()['contribs'])
-        
-        fig = go.Figure(go.Waterfall(
-            name = "Prediction", #orientation = "h", 
-            measure = ["relative"] * (len(contribs)-1) + ["total"],
-            x = contribs.index,
-            y = contribs.Contributions,
-            connector = {"mode":"between", "line":{"width":4, "color":"rgb(0, 0, 0)", "dash":"solid"}}
-        ))
-        #contribs.to_json(date_format='iso', orient='split')
-        gain = probability*(credit-loan) + (probability-1) * loan
-        gain = probability*(credit) - loan
-        loan_rate = credit/loan - 1
-        gain = loan*(loan_rate*probability-(1-probability))
+        if trigger_id == 'predict' :
+            print('Callback predict')
+            loan = x['AMT_GOODS_PRICE']
+            credit = x['AMT_CREDIT']
+            annuity = x['AMT_ANNUITY']
+            income = x['AMT_INCOME_TOTAL']
+            sent = {
+                "model" : model,
+                "x" : x
+            }
+            if None in x.values() :
+                print('none values in data')
+                for k in x :
+                    if x[k] is None :
+                        none_res[-1] = 'Erreur ! Valeur nulle pour la variable : %s' %(k)
+                return none_res
+            print(str(sent).replace('\'','"'))
+            trigger_var_df = pd.read_json(dfjson, orient='split')
+            
+            opt_trigger = float(model_trigger_opt)
+            url = api_url + '/api/predict'
+            #print('#### GETTING MODEL LIST - URL HOST : ', url)
+            response = requests.post(url, json=sent)
+            probability = response.json()['probability']
+            contribs = pd.DataFrame(response.json()['contribs'])
+            print(probability)
+            print(contribs)
+            
+            fig = go.Figure(go.Waterfall(
+                name = "Prediction", #orientation = "h", 
+                measure = ["relative"] * (len(contribs)-1) + ["total"],
+                x = contribs.index,
+                y = contribs.Contributions,
+                connector = {"mode":"between", "line":{"width":4, "color":"rgb(0, 0, 0)", "dash":"solid"}}
+            ))
+            gain = probability*(credit-loan) + (probability-1) * loan
+            gain = probability*(credit) - loan
+            loan_rate = credit/loan - 1
+            gain = loan*(loan_rate*probability-(1-probability))
 
-        if probability >= opt_trigger :
-            cost = max(trigger_var_df['cost'])
-            gain = loan*cost
-            status = 'Accepté'
-            status_color = 'green'
-            probability = "%.2f (>%.2f)" %(probability, opt_trigger)
-        else :
-            cost = trigger_var_df[trigger_var_df['trigger']>= probability]['cost'].iloc[0]
-            gain = loan*cost
-            status = 'Rejeté'
-            status_color = 'red'
-            probability = "%.2f (<%.2f)" %(probability, opt_trigger)
-        cmaps = colormaps['brg']
-        if credit == loan :
-            ratio_gain = np.inf
-            color_gain = cmaps(0.5)
-        else :
-            ratio_gain = gain/(credit-loan)
-            color_gain = cmaps(ratio_gain/2+0.5)
-        gain = '%d $' %(gain)
-        ratio_gain = '%.2f' %(ratio_gain)
-        style_status['color'] = status_color
-        style_gain['color'] = to_hex(color_gain)
-        return probability, gain, style_gain, ratio_gain, style_gain, fig, status, style_status
-
-
-    
+            if probability >= opt_trigger :
+                cost = max(trigger_var_df['cost'])
+                gain = loan*cost
+                status = 'Accepté'
+                status_color = 'green'
+                probability = "%.2f (>%.2f)" %(probability, opt_trigger)
+            else :
+                cost = trigger_var_df[trigger_var_df['trigger']>= probability]['cost'].iloc[0]
+                gain = loan*cost
+                status = 'Rejeté'
+                status_color = 'red'
+                probability = "%.2f (<%.2f)" %(probability, opt_trigger)
+            cmaps = colormaps['brg']
+            if credit == loan :
+                ratio_gain = np.inf
+                color_gain = cmaps(0.5)
+            else :
+                ratio_gain = gain/(credit-loan)
+                color_gain = cmaps(ratio_gain/2+0.5)
+            gain = '%d $' %(gain)
+            ratio_gain = '%.2f' %(ratio_gain)
+            style_status['color'] = status_color
+            style_gain['color'] = to_hex(color_gain)
+            return probability, gain, style_gain, ratio_gain, style_gain, fig, status, style_status, 'OK'

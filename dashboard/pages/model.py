@@ -10,6 +10,10 @@ model_tab = dcc.Tab(label='Modèle', children = [
                 html.H4('Description du modèle :'),
                 html.Div(id='model_desc', style={'width': '50%', 'height' : '120px',"border":"1px black solid"}),
                 html.Div([
+                    html.H4('Score ROC', style={'width': '80%', 'display': 'inline-block'}), 
+                    html.Div(id='model_roc', style={'width': '19%', 'display': 'inline-block'}
+                    )], style={'width': '49%', 'display': 'inline-block', 'vertical-align': 'top'}                    ),
+                html.Div([
                     html.Div([
                         html.H4('Taux d\'intérêt :', style={'width': '80%', 'display': 'inline-block'}),
                         html.Div(id="est_loan_rate2", style={'width': '19%', 'display': 'inline-block'}),
